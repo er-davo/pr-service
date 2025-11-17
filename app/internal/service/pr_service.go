@@ -395,6 +395,10 @@ func (s *PRService) TeamGet(ctx context.Context, teamName string) (*models.Team,
 	return team, nil
 }
 
+func (s *PRService) TeamGetByID(ctx context.Context, teamID uuid.UUID) (*models.Team, error) {
+	return s.teamRepo.GetByID(ctx, teamID)
+}
+
 func (s *PRService) UsersGetReview(ctx context.Context, userID uuid.UUID) ([]*models.PullRequest, error) {
 	prs, err := s.prRepo.ListByReviewer(ctx, userID)
 	if err != nil {

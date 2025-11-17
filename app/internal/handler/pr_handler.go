@@ -241,17 +241,108 @@ func (h *PRHandler) PostTeamAdd(c echo.Context) error {
 }
 
 func (h *PRHandler) GetTeamGet(c echo.Context, params api.GetTeamGetParams) error {
-	return nil
+	team, err := h.prService.TeamGet(c.Request().Context(), params.TeamName)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			errResp := api.ErrorResponse{}
+			errResp.Error.Code = "not_found"
+			errResp.Error.Message = "team not found"
+			return c.JSON(http.StatusNotFound, errResp)
+		}
+		return c.JSON(http.StatusInternalServerError, "")
+	}
+
+	resp := api.Team{
+		TeamName: team.Name,
+		Members:  make([]api.TeamMember, len(team.Members)),
+	}
+
+	for i, u := range team.Members {
+		resp.Members[i] = api.TeamMember{
+			UserId:   u.ID.String(),
+			Username: u.Name,
+			IsActive: u.IsActive,
+		}
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *PRHandler) GetUsersGetReview(c echo.Context, params api.GetUsersGetReviewParams) error {
-	return nil
+	id, err := uuid.Parse(params.UserId)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "invalid id")
+	}
+	prs, err := h.prService.UsersGetReview(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			errResp := api.ErrorResponse{}
+			errResp.Error.Code = "not_found"
+			errResp.Error.Message = "user not found"
+			return c.JSON(http.StatusNotFound, errResp)
+		}
+		return c.JSON(http.StatusInternalServerError, "")
+	}
+
+	resp := struct {
+		UserID       string                 `json:"user_id"`
+		PullRequests []api.PullRequestShort `json:"pull_requests"`
+	}{
+		UserID:       params.UserId,
+		PullRequests: make([]api.PullRequestShort, len(prs)),
+	}
+
+	for i, pr := range prs {
+		resp.PullRequests[i] = api.PullRequestShort{
+			PullRequestId:   pr.ID.String(),
+			PullRequestName: pr.Name,
+			AuthorId:        pr.AuthorID.String(),
+			Status:          api.PullRequestShortStatus(pr.Status),
+		}
+	}
+
+	return c.JSON(http.StatusOK, resp)
+
 }
 
 func (h *PRHandler) PostUsersSetIsActive(c echo.Context) error {
-	return nil
-}
+	req := api.PostUsersSetIsActiveJSONBody{}
 
-func (h *PRHandler) PostUsersSetReview(c echo.Context) error {
-	return nil
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, "")
+	}
+
+	id, err := uuid.Parse(req.UserId)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "invalid id")
+	}
+
+	user, err := h.prService.UsersSetIsActive(
+		c.Request().Context(),
+		id,
+		req.IsActive,
+	)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			errResp := api.ErrorResponse{}
+			errResp.Error.Code = "not_found"
+			errResp.Error.Message = "user not found"
+			return c.JSON(http.StatusNotFound, errResp)
+		}
+		return c.JSON(http.StatusInternalServerError, "")
+	}
+
+	team, err := h.prService.TeamGetByID(c.Request().Context(), *user.TeamID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, "")
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"user": api.User{
+			UserId:   user.ID.String(),
+			Username: user.Name,
+			IsActive: user.IsActive,
+			TeamName: team.Name,
+		},
+	})
 }
