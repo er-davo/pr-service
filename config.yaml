@@ -1,0 +1,10 @@
+app:
+  port: 8080
+  log_level: debug
+retry:
+  backoff: exponential
+  base: 1s
+  factor: 2
+  max: 10s
+  max_attempts: 5
+  jitter: 0.1
